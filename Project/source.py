@@ -1,32 +1,267 @@
-from tkinter import *
-window = Tk()
+#Check if one figure can beat another, add 'check' for king
 
+for a in range(-1, 2, 2):
+    attack = beginningpos[0] + direction, beginningpos[1] + a
+    if board.alpha_notation(attack) in board.occupied(enemy):
+        allowed_moves.append(attack)
+allowed_moves = filter(board.is_on_board, allowed_moves)
+return map(board.alpha_notation, allowed_moves)
 
-def create_board():
-    count_rows = 8
-    width = 75
-    start_x = 0
-    start_y = 0
-    cell_color = "white"
-    for i in range(count_rows):
-        for j in range(count_rows):
-            canvas.create_rectangle(start_x, start_y, start_x + width, start_y + width, fill=cell_color)
-            start_x = start_x + width
-            if cell_color == "white":
-                cell_color = "black"
-            else:
-                cell_color = "white"
-        start_x = 0
-        start_y = start_y + width
-        if cell_color == "white":
-            cell_color = "black"
+#Add resources (images, sounds, put figures in the start places, create a list of figures to continue game)
+
+def create_piece(piece, color='white'):
+    if piece in (None, ' '): return
+    if len(piece) == 1:
+        if piece.isupper():
+            color = 'white'
         else:
-            cell_color = "white"
+            color = 'black'
+        piece = SHORT_NAME[piece.upper()]
+    module = sys.modules[__name__]
+    return module.__dict__[piece](color)
 
 
-canvas = Canvas(window, width=600, height=600)
-canvas.pack()
+class Piece(object):
+    def __init__(self, color):
+        if color == 'black':
+            self.shortname = self.shortname.lower()
+        elif color == 'white':
+            self.shortname = self.shortname.upper()
+        self.color = color
 
-create_board()
+    def place(self, board):
+        ''' Keep a reference to the board '''
+        self.board = board
 
-window.mainloop()
+    def moves_available(self, pos, orthogonal, diagonal, distance):
+        board = self.board
+        allowed_moves = []
+        orth = ((-1, 0), (0, -1), (0, 1), (1, 0))
+        diag = ((-1, -1), (-1, 1), (1, -1), (1, 1))
+        piece = self
+        beginningpos = board.num_notation(pos.upper())
+        if orthogonal and diagonal:
+            directions = diag + orth
+        elif diagonal:
+            directions = diag
+        elif orthogonal:
+            directions = orth
+        for x, y in directions:
+            collision = False
+            for step in range(1, distance + 1):
+                if collision: break
+                dest = beginningpos[0] + step * x, beginningpos[1] + step * y
+                if self.board.alpha_notation(dest) not in board.occupied(
+                        'white') + board.occupied('black'):
+                    allowed_moves.append(dest)
+                elif self.board.alpha_notation(dest) in board.occupied(
+                        piece.color):
+                    collision = True
+                else:
+                    allowed_moves.append(dest)
+                    collision = True
+        allowed_moves = filter(board.is_on_board, allowed_moves)
+        return map(board.alpha_notation, allowed_moves)
+
+
+class King(Piece):
+    shortname = 'k'
+
+    def moves_available(self, pos):
+        return super(King, self).moves_available(pos.upper(), True, True, 1)
+
+
+class Queen(Piece):
+    shortname = 'q'
+
+    def moves_available(self, pos):
+        return super(Queen, self).moves_available(pos.upper(), True, True, 8)
+
+
+class Rook(Piece):
+    shortname = 'r'
+
+    def moves_available(self, pos):
+        return super(Rook, self).moves_available(pos.upper(), True, False, 8)
+
+
+class Bishop(Piece):
+    shortname = 'b'
+
+    def moves_available(self, pos):
+        return super(Bishop, self).moves_available(pos.upper(), False, True, 8)
+
+
+class Knight(Piece):
+    shortname = 'n'
+
+    def moves_available(self, pos):
+        board = self.board
+        allowed_moves = []
+        beginningpos = board.num_notation(pos.upper())
+        piece = board.get(pos.upper())
+        deltas = (
+        (-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1))
+        for x, y in deltas:
+            dest = beginningpos[0] + x, beginningpos[1] + y
+            if (board.alpha_notation(dest) not in board.occupied(piece.color)):
+                allowed_moves.append(dest)
+        allowed_moves = filter(board.is_on_board, allowed_moves)
+        return map(board.alpha_notation, allowed_moves)
+
+
+class Pawn(Piece):
+    shortname = 'p'
+
+    def moves_available(self, pos):
+        board = self.board
+        piece = self
+        if self.color == 'white':
+            startpos, direction, enemy = 1, 1, 'black'
+        else:
+            startpos, direction, enemy = 6, -1, 'white'
+        allowed_moves = []
+        # Moving
+        prohibited = board.occupied('white') + board.occupied('black')
+        beginningpos = board.num_notation(pos.upper())
+        forward = beginningpos[0] + direction, beginningpos[1]
+        if board.alpha_notation(forward) not in prohibited:
+            allowed_moves.append(forward)
+            if beginningpos[0] == startpos:
+                # If pawn is in starting position allow double moves
+                double_forward = (forward[0] + direction, forward[1])
+                if board.alpha_notation(double_forward) not in prohibited:
+                    allowed_moves.append(double_forward)
+        # Attacking
+        for a in range(-1, 2, 2):
+            attack = beginningpos[0] + direction, beginningpos[1] + a
+            if board.alpha_notation(attack) in board.occupied(enemy):
+                allowed_moves.append(attack)
+        allowed_moves = filter(board.is_on_board, allowed_moves)
+        return map(board.alpha_notation, allowed_moves)
+   #Show possible steps before move
+
+    def moves_available(self, pos, orthogonal, diagonal, distance):
+        board = self.board
+        allowed_moves = []
+        orth = ((-1, 0), (0, -1), (0, 1), (1, 0))
+        diag = ((-1, -1), (-1, 1), (1, -1), (1, 1))
+        piece = self
+        beginningpos = board.num_notation(pos.upper())
+        if orthogonal and diagonal:
+            directions = diag + orth
+        elif diagonal:
+            directions = diag
+        elif orthogonal:
+            directions = orth
+        for x, y in directions:
+            collision = False
+            for step in range(1, distance + 1):
+                if collision: break
+                dest = beginningpos[0] + step * x, beginningpos[1] + step * y
+                if self.board.alpha_notation(dest) not in board.occupied(
+                        'white') + board.occupied('black'):
+                    allowed_moves.append(dest)
+                elif self.board.alpha_notation(dest) in board.occupied(
+                        piece.color):
+                    collision = True
+                else:
+                    allowed_moves.append(dest)
+                    collision = True
+        allowed_moves = filter(board.is_on_board, allowed_moves)
+        return map(board.alpha_notation, allowed_moves)
+
+
+class King(Piece):
+    shortname = 'k'
+
+    def moves_available(self, pos):
+        return super(King, self).moves_available(pos.upper(), True, True, 1)
+
+
+class Queen(Piece):
+    shortname = 'q'
+
+    def moves_available(self, pos):
+        return super(Queen, self).moves_available(pos.upper(), True, True, 8)
+
+
+class Rook(Piece):
+    shortname = 'r'
+
+    def moves_available(self, pos):
+        return super(Rook, self).moves_available(pos.upper(), True, False, 8)
+
+
+class Bishop(Piece):
+    shortname = 'b'
+
+    def moves_available(self, pos):
+        return super(Bishop, self).moves_available(pos.upper(), False, True, 8)
+
+
+class Knight(Piece):
+    shortname = 'n'
+
+    def moves_available(self, pos):
+        board = self.board
+        allowed_moves = []
+        beginningpos = board.num_notation(pos.upper())
+        piece = board.get(pos.upper())
+        deltas = (
+            (-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1))
+        for x, y in deltas:
+            dest = beginningpos[0] + x, beginningpos[1] + y
+            if (board.alpha_notation(dest) not in board.occupied(piece.color)):
+                allowed_moves.append(dest)
+        allowed_moves = filter(board.is_on_board, allowed_moves)
+        return map(board.alpha_notation, allowed_moves)
+
+
+class Pawn(Piece):
+    shortname = 'p'
+
+    def moves_available(self, pos):
+        board = self.board
+        piece = self
+        if self.color == 'white':
+            startpos, direction, enemy = 1, 1, 'black'
+        else:
+            startpos, direction, enemy = 6, -1, 'white'
+        allowed_moves = []
+        prohibited = board.occupied('white') + board.occupied('black')
+        beginningpos = board.num_notation(pos.upper())
+        forward = beginningpos[0] + direction, beginningpos[1]
+        if board.alpha_notation(forward) not in prohibited:
+            allowed_moves.append(forward)
+            if beginningpos[0] == startpos:
+                double_forward = (forward[0] + direction, forward[1])
+                if board.alpha_notation(double_forward) not in prohibited:
+                    allowed_moves.append(double_forward)
+        for a in range(-1, 2, 2):
+            attack = beginningpos[0] + direction, beginningpos[1] + a
+            if board.alpha_notation(attack) in board.occupied(enemy):
+                allowed_moves.append(attack)
+        allowed_moves = filter(board.is_on_board, allowed_moves)
+        return map(board.alpha_notation, allowed_moves)
+
+    #Create posibility to move figures
+
+    def square_clicked(self, event):
+        col_size = row_size = self.dim_square
+        selected_column = int(event.x / col_size)
+        selected_row = 7 - int(event.y / row_size)
+        pos = self.chessboard.alpha_notation((selected_row, selected_column))
+        try:
+            piece = self.chessboard[pos]
+        except:
+            pass
+        if self.selected_piece:
+            self.shift(self.selected_piece[1], pos)
+            self.selected_piece = None
+            self.focused = None
+            self.pieces = {}
+            self.draw_board()
+            self.draw_pieces()
+        self.focus(pos)
+        self.draw_board()
